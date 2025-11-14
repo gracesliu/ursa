@@ -1,5 +1,7 @@
 """
 Community Notifier - Sends SMS alerts to people in a 50-mile radius
+for wildlife, wildfire, and lost pet detections
+Uses AI to generate dynamic, contextual messages
 """
 
 import math
@@ -7,12 +9,23 @@ from typing import Dict, Any, List, Optional
 from services.twilio_service import TwilioService
 from datetime import datetime
 
+# Import AI message generator
+try:
+    from services.ai_message_generator import AIMessageGenerator
+    AI_MESSAGE_GENERATOR_AVAILABLE = True
+except ImportError:
+    AI_MESSAGE_GENERATOR_AVAILABLE = False
+    AIMessageGenerator = None
+
 class CommunityNotifier:
     """Notifies community members within 50 miles of an incident"""
     
     def __init__(self, twilio_service: TwilioService):
         self.twilio_service = twilio_service
         self.notification_radius_miles = 50.0
+        
+        # Initialize AI message generator
+        self.ai_generator = AIMessageGenerator() if AI_MESSAGE_GENERATOR_AVAILABLE and AIMessageGenerator else None
         
         # Demo community members (in production, this would be from a database)
         # Format: {phone_number: {"lat": float, "lng": float, "name": str}}
@@ -63,8 +76,11 @@ class CommunityNotifier:
         # Find community members within radius
         nearby_members = self._find_nearby_members(incident_lat, incident_lng)
         
-        # Generate message
-        message = self._generate_community_message(threat_info, analysis, nearby_cameras)
+        # Generate message using AI
+        if self.ai_generator:
+            message = self.ai_generator.generate_sms_message(threat_info, analysis, nearby_cameras)
+        else:
+            message = self._generate_community_message(threat_info, analysis, nearby_cameras)
         
         # Send notifications
         results = []
@@ -151,11 +167,12 @@ class CommunityNotifier:
         nearby_cameras: Optional[List[Dict[str, Any]]]
     ) -> str:
         """Generate AI-generated message for community notification"""
-        activity_type = threat_info.get("type", "suspicious activity")
+        activity_type = threat_info.get("type", "detection")
         location = threat_info.get("location", {})
         severity = analysis.get("severity", "unknown")
         category = analysis.get("category", "unknown")
         timestamp = threat_info.get("timestamp", datetime.now().isoformat())
+        details = threat_info.get("details", {})
         
         # Format timestamp
         try:
@@ -164,23 +181,30 @@ class CommunityNotifier:
         except:
             time_str = "recently"
         
-        message = f"🚨 URSA SECURITY ALERT 🚨\n\n"
-        message += f"Incident detected: {activity_type.replace('_', ' ').title()}\n"
+        message = f"🚨 URSA WILDLIFE & WILDFIRE ALERT 🚨\n\n"
+        message += f"Detection: {activity_type.replace('_', ' ').title()}\n"
         message += f"Severity: {severity.upper()}\n"
         message += f"Time: {time_str}\n\n"
         
         # Add category-specific guidance
-        if category == "car_prowling":
-            message += "⚠️ Be alert: Someone may be checking vehicles in your area. "
-            message += "Please check your vehicles and report any suspicious activity.\n\n"
-        elif category == "suspicious_activity":
-            message += "⚠️ Unusual activity detected in your neighborhood. "
-            message += "Please remain vigilant and report any concerns.\n\n"
-        elif category == "behavioral_abnormality":
-            message += "⚠️ Behavioral concern detected. "
-            message += "Please check on neighbors if safe to do so.\n\n"
-        elif category == "fire":
-            message += "🔥 FIRE DETECTED. Evacuate if necessary and call 911 immediately.\n\n"
+        if category == "wildfire":
+            message += "🔥 WILDFIRE DETECTED. Evacuate if necessary and call 911 immediately. "
+            message += "Fire department has been notified.\n\n"
+        elif category == "lost_pet":
+            pet_type = details.get("pet_type", "pet")
+            message += f"🐾 LOST PET ALERT: {pet_type.title()} detected without owner nearby. "
+            if details.get("is_moving_across_streets"):
+                message += f"Detected across {details.get('camera_count', 1)} camera locations - moving across streets. "
+            message += "If you see this pet, please contact animal control or try to safely approach if it's friendly.\n\n"
+        elif category == "wildlife_bear":
+            message += "🐻 BEAR DETECTED. Keep distance, secure food sources, and alert wildlife authorities. "
+            message += "Do not approach the bear.\n\n"
+        elif category == "wildlife_coyote":
+            message += "🐺 COYOTE DETECTED. Keep pets indoors and alert wildlife authorities. "
+            message += "Monitor the situation from a safe distance.\n\n"
+        elif category == "wildlife":
+            message += "🦌 WILDLIFE DETECTED in your area. "
+            message += "Please be aware and maintain safe distance.\n\n"
         elif category in ["assault", "kidnapping"]:
             message += "🚨 CRITICAL INCIDENT. Stay indoors, lock doors, and call 911 if you see anything.\n\n"
         

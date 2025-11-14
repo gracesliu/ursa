@@ -71,7 +71,7 @@ function App() {
 
   const startScenario = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/scenarios/start?scenario_name=car_prowler', {
+      const response = await fetch('http://localhost:8000/api/scenarios/start?scenario_name=wildlife_detection', {
         method: 'POST',
       })
       const data = await response.json()
@@ -110,8 +110,8 @@ function App() {
     <div className="app">
       <header className="app-header">
         <div className="header-content">
-          <h1>Constellation</h1>
-          <p className="subtitle">AI-Powered Neighborhood Security Network</p>
+          <h1>URSA</h1>
+          <p className="subtitle">AI-Powered Wildlife & Wildfire Detection Network</p>
         </div>
         <div className="status-indicator">
           <span className={`status-dot ${isConnected ? 'connected' : 'disconnected'}`}></span>
@@ -133,7 +133,7 @@ function App() {
             scenarioRunning={scenarioRunning}
             onStart={startScenario}
             onStop={stopScenario}
-            threatCount={threats.length}
+            detectionCount={threats.length}
             cameraCount={cameras.length}
             useRealAI={useRealAI}
             onToggleAI={toggleAIMode}

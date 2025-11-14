@@ -1,5 +1,6 @@
 """
 Video Analyzer - Real AI video analysis using computer vision + YOLO object detection
+Wildlife and Wildfire Detection System
 """
 
 import cv2
@@ -17,7 +18,7 @@ except ImportError:
     YOLO = None
 
 class VideoAnalyzer:
-    """Analyzes video frames using computer vision + YOLO object detection for threat detection"""
+    """Analyzes video frames using computer vision + YOLO object detection for wildlife and wildfire detection"""
     
     def __init__(self):
         self.detection_history: List[Dict[str, Any]] = []
@@ -41,14 +42,14 @@ class VideoAnalyzer:
     
     def analyze_frame(self, frame: np.ndarray, camera_id: str) -> Optional[Dict[str, Any]]:
         """
-        Analyze a single video frame for suspicious activity using YOLO + motion detection
+        Analyze a single video frame for wildlife and wildfire using YOLO + motion detection
         
         Args:
             frame: OpenCV frame (numpy array, BGR format)
             camera_id: ID of the camera
             
         Returns:
-            Detection dict if threat found, None otherwise
+            Detection dict if wildlife or wildfire found, None otherwise
         """
         # Convert to grayscale for processing
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -56,28 +57,117 @@ class VideoAnalyzer:
         # Get previous frame for motion analysis
         previous = self.frame_buffer[-2] if len(self.frame_buffer) >= 2 else None
         
-        # Step 1: Object detection with YOLO (if available)
+        # Step 1: Fire/smoke detection (color-based, before object detection)
+        fire_detection = self._detect_fire(frame, gray, previous, camera_id)
+        
+        # Step 2: Object detection with YOLO (if available) - for wildlife
         detected_objects = self._detect_objects(frame) if self.yolo_model else None
         
-        # Step 2: Motion analysis
+        # Step 3: Motion analysis
         motion_data = self._analyze_motion(gray, previous) if previous is not None else (0.0, 0.0)
         
-        # Step 3: Combined suspicious activity detection
-        detection = self._detect_suspicious_activity_combined(
-            gray, camera_id, previous, detected_objects, motion_data
+        # Step 4: Fire takes priority - return immediately if detected
+        if fire_detection:
+            return fire_detection
+        
+        # Step 5: Check for lost pet (pet without person nearby)
+        lost_pet_detection = self._detect_lost_pet(
+            frame, gray, camera_id, previous, detected_objects, motion_data
+        )
+        if lost_pet_detection:
+            return lost_pet_detection
+        
+        # Step 6: Combined wildlife activity detection
+        detection = self._detect_wildlife_activity_combined(
+            frame, gray, camera_id, previous, detected_objects, motion_data
         )
         
         return detection
     
-    def _detect_objects(self, frame: np.ndarray) -> Dict[str, Any]:
+    def _detect_fire(self, frame: np.ndarray, gray_frame: np.ndarray, previous_frame: Optional[np.ndarray], camera_id: str) -> Optional[Dict[str, Any]]:
         """
-        Detect objects in frame using YOLO
+        Detect fire and smoke using color analysis and motion patterns
         
         Returns:
-            Dict with detected objects, their classes, and positions
+            Detection dict if fire detected, None otherwise
+        """
+        # Convert BGR to HSV for better color detection
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        
+        # Define color ranges for fire (red, orange, yellow)
+        # Fire colors in HSV
+        lower_fire1 = np.array([0, 50, 50])    # Red lower bound
+        upper_fire1 = np.array([10, 255, 255]) # Red upper bound
+        lower_fire2 = np.array([10, 50, 50])   # Orange lower bound
+        upper_fire2 = np.array([30, 255, 255]) # Orange/Yellow upper bound
+        
+        # Create masks for fire colors
+        mask1 = cv2.inRange(hsv, lower_fire1, upper_fire1)
+        mask2 = cv2.inRange(hsv, lower_fire2, upper_fire2)
+        fire_mask = cv2.bitwise_or(mask1, mask2)
+        
+        # Calculate fire pixel density
+        fire_pixel_count = np.sum(fire_mask > 0)
+        total_pixels = fire_mask.shape[0] * fire_mask.shape[1]
+        fire_density = fire_pixel_count / total_pixels
+        
+        # Check for smoke (grayish colors, high motion, expanding)
+        gray_mask = cv2.inRange(hsv, np.array([0, 0, 50]), np.array([180, 50, 200]))
+        smoke_pixel_count = np.sum(gray_mask > 0)
+        smoke_density = smoke_pixel_count / total_pixels
+        
+        # Motion analysis for fire (fire flickers and moves)
+        motion_intensity = 0.0
+        if previous_frame is not None:
+            diff = cv2.absdiff(gray_frame, previous_frame)
+            motion_intensity = np.sum(diff > 30) / total_pixels
+        
+        # Fire detection criteria
+        fire_score = 0.0
+        if fire_density > 0.05:  # At least 5% of frame has fire colors
+            fire_score += 0.4
+        if fire_density > 0.10:  # Strong fire presence
+            fire_score += 0.3
+        if motion_intensity > 0.05 and fire_density > 0.03:  # Flickering fire
+            fire_score += 0.2
+        if smoke_density > 0.08:  # Smoke present
+            fire_score += 0.1
+        
+        # Threshold for fire detection
+        if fire_score > 0.5:
+            confidence = min(0.95, fire_score)
+            
+            return {
+                "camera_id": camera_id,
+                "activity_type": "wildfire",
+                "confidence": float(confidence),
+                "timestamp": datetime.now().isoformat(),
+                "behavior": "wildfire",
+                "details": {
+                    "description": f"Wildfire detected - fire density: {fire_density:.1%}, smoke density: {smoke_density:.1%}",
+                    "severity": "critical" if confidence > 0.8 else "high",
+                    "action_required": True,
+                    "ai_metrics": {
+                        "fire_density": float(fire_density),
+                        "smoke_density": float(smoke_density),
+                        "motion_intensity": float(motion_intensity),
+                        "fire_score": float(fire_score),
+                        "detection_method": "color_analysis"
+                    }
+                }
+            }
+        
+        return None
+    
+    def _detect_objects(self, frame: np.ndarray) -> Dict[str, Any]:
+        """
+        Detect wildlife (animals) in frame using YOLO
+        
+        Returns:
+            Dict with detected animals, their classes, and positions
         """
         if not self.yolo_model:
-            return {"objects": [], "people": [], "vehicles": [], "count": 0}
+            return {"objects": [], "animals": [], "count": 0}
         
         try:
             # Run YOLO inference
@@ -85,12 +175,18 @@ class VideoAnalyzer:
             
             # Parse results
             detected_objects = []
+            animals = []
+            pets = []
             people = []
-            vehicles = []
             
-            # Classes we care about for security
+            # COCO animal class IDs for wildlife detection
+            # 14: bird, 15: cat, 16: dog, 17: horse, 18: sheep, 19: cow, 
+            # 20: elephant, 21: bear, 22: zebra, 23: giraffe
+            animal_class_ids = [14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+            
+            # Pet class IDs (domestic animals that could be lost pets)
+            pet_class_ids = [15, 16]  # cat, dog
             person_class_id = 0  # COCO class 0 = person
-            vehicle_class_ids = [2, 3, 5, 7]  # car, motorcycle, bus, truck
             
             for result in results:
                 boxes = result.boxes
@@ -101,7 +197,6 @@ class VideoAnalyzer:
                     
                     # Get bounding box coordinates
                     x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                    
                     class_name = result.names[cls]
                     
                     obj_data = {
@@ -118,14 +213,17 @@ class VideoAnalyzer:
                     # Categorize
                     if cls == person_class_id and conf > 0.5:
                         people.append(obj_data)
-                    elif cls in vehicle_class_ids and conf > 0.5:
-                        vehicles.append(obj_data)
-            
+                    elif cls in pet_class_ids and conf > 0.5:
+                        pets.append(obj_data)
+                    elif cls in animal_class_ids and conf > 0.5:
+                        animals.append(obj_data)
+                    
             # Store in history for temporal analysis
             self.object_history.append({
                 "timestamp": datetime.now().isoformat(),
+                "animals": animals,
+                "pets": pets,
                 "people": people,
-                "vehicles": vehicles,
                 "all_objects": detected_objects
             })
             if len(self.object_history) > 30:  # Keep last 30 frames
@@ -133,30 +231,138 @@ class VideoAnalyzer:
             
             return {
                 "objects": detected_objects,
+                "animals": animals,
+                "pets": pets,
                 "people": people,
-                "vehicles": vehicles,
                 "count": len(detected_objects),
-                "people_count": len(people),
-                "vehicles_count": len(vehicles)
+                "animals_count": len(animals),
+                "pets_count": len(pets),
+                "people_count": len(people)
             }
         except Exception as e:
             print(f"YOLO detection error: {e}")
-            return {"objects": [], "people": [], "vehicles": [], "count": 0}
+            return {"objects": [], "animals": [], "pets": [], "people": [], "count": 0}
     
-    def _detect_suspicious_activity_combined(
-        self, gray_frame: np.ndarray, camera_id: str, 
+    def _detect_lost_pet(
+        self, frame: np.ndarray, gray_frame: np.ndarray, camera_id: str,
+        previous_frame: Optional[np.ndarray],
+        detected_objects: Optional[Dict[str, Any]],
+        motion_data: Tuple[float, float]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Detect lost pet: pet (dog/cat) detected without a person nearby
+        and moving across multiple locations (not just in yard)
+        
+        Returns:
+            Detection dict if lost pet found, None otherwise
+        """
+        if not detected_objects:
+            return None
+        
+        pets = detected_objects.get("pets", [])
+        people = detected_objects.get("people", [])
+        
+        if not pets or len(pets) == 0:
+            return None
+        
+        # Check if any pet is without a person nearby
+        lost_pets = []
+        for pet in pets:
+            pet_center = pet["center"]
+            pet_bbox = pet["bbox"]
+            
+            # Check if there's a person nearby (within 100 pixels)
+            has_person_nearby = False
+            for person in people:
+                person_center = person["center"]
+                # Calculate distance between pet and person centers
+                distance = np.sqrt(
+                    (pet_center[0] - person_center[0])**2 + 
+                    (pet_center[1] - person_center[1])**2
+                )
+                # Also check if person bbox overlaps with pet area
+                person_bbox = person["bbox"]
+                if (distance < 100 or 
+                    (person_bbox[0] < pet_bbox[2] + 50 and person_bbox[2] > pet_bbox[0] - 50 and
+                     person_bbox[1] < pet_bbox[3] + 50 and person_bbox[3] > pet_bbox[1] - 50)):
+                    has_person_nearby = True
+                    break
+            
+            if not has_person_nearby:
+                lost_pets.append(pet)
+        
+        if len(lost_pets) == 0:
+            return None
+        
+        # Check if pet is moving (not stationary in yard)
+        motion_speed, motion_consistency = motion_data
+        
+        # Check if pet has been moving across frames (indicating it's not just in a yard)
+        pet_moving = False
+        if len(self.object_history) >= 5:
+            recent_pet_positions = []
+            for hist in self.object_history[-5:]:
+                if hist.get("pets"):
+                    for p in hist["pets"]:
+                        # Check if it's the same pet (similar position)
+                        if abs(p["center"][0] - lost_pets[0]["center"][0]) < 200:
+                            recent_pet_positions.append(p["center"])
+            
+            if len(recent_pet_positions) >= 3:
+                # Calculate position variance
+                positions = np.array(recent_pet_positions)
+                position_variance = np.var(positions, axis=0).sum()
+                # High variance = pet moving around (not just in yard)
+                if position_variance > 5000:  # Pet has moved significantly
+                    pet_moving = True
+        
+        # Also check motion speed
+        if motion_speed > 0.02:  # Pet is moving
+            pet_moving = True
+        
+        # Lost pet criteria: pet without person nearby AND moving
+        if pet_moving:
+            pet_type = lost_pets[0]["class_name"]
+            confidence = min(0.90, lost_pets[0]["confidence"] + 0.1 if pet_moving else lost_pets[0]["confidence"])
+            
+            return {
+                "camera_id": camera_id,
+                "activity_type": "lost_pet",
+                "confidence": float(confidence),
+                "timestamp": datetime.now().isoformat(),
+                "behavior": "lost_pet",
+                "details": {
+                    "description": f"Lost {pet_type} detected - no owner nearby, moving across area",
+                    "severity": "medium",
+                    "action_required": True,
+                    "pet_type": pet_type,
+                    "pet_count": len(lost_pets),
+                    "ai_metrics": {
+                        "motion_speed": float(motion_speed),
+                        "motion_consistency": float(motion_consistency),
+                        "pet_moving": pet_moving,
+                        "has_owner_nearby": False,
+                        "detection_method": "yolo_pet_analysis"
+                    }
+                }
+            }
+        
+        return None
+    
+    def _detect_wildlife_activity_combined(
+        self, frame: np.ndarray, gray_frame: np.ndarray, camera_id: str, 
         previous_frame: Optional[np.ndarray], 
         detected_objects: Optional[Dict[str, Any]],
         motion_data: Tuple[float, float]
     ) -> Optional[Dict[str, Any]]:
         """
-        Detect suspicious activity using combined YOLO object detection + motion analysis
+        Detect wildlife activity using combined YOLO object detection + motion analysis
         
         Uses holistic approach:
-        - YOLO object detection (people, vehicles)
+        - YOLO object detection (animals)
         - Motion analysis (speed, consistency)
         - Temporal analysis (persistent patterns)
-        - Behavioral analysis (object interactions)
+        - Behavioral analysis (animal presence and movement)
         """
         # Store frame for temporal analysis
         self.frame_buffer.append(gray_frame.copy())
@@ -184,18 +390,18 @@ class VideoAnalyzer:
         movement_pattern = self._analyze_movement_pattern()
         
         # Object-based analysis (if YOLO available)
-        object_analysis = self._analyze_objects(detected_objects) if detected_objects else {}
+        object_analysis = self._analyze_wildlife_objects(detected_objects) if detected_objects else {}
         
-        # Combined suspicious score with object detection
-        suspicious_score = self._calculate_suspicious_score_combined(
+        # Combined wildlife detection score
+        wildlife_score = self._calculate_wildlife_score(
             edge_density, std_intensity, motion_speed, 
             motion_consistency, persistent_activity, movement_pattern,
             object_analysis
         )
         
         # Only trigger if score exceeds threshold
-        if suspicious_score > 0.60:  # Slightly lower threshold since we have better data
-            activity_type = self._classify_activity_with_objects(
+        if wildlife_score > 0.50:  # Threshold for wildlife detection
+            activity_type = self._classify_wildlife_activity(
                 gray_frame, edge_density, std_intensity, 
                 motion_speed, persistent_activity, movement_pattern,
                 object_analysis
@@ -203,14 +409,17 @@ class VideoAnalyzer:
             
             if activity_type:
                 # Confidence based on multiple factors including object detection
-                confidence = min(0.95, suspicious_score)
+                confidence = min(0.95, wildlife_score)
                 
                 # Build description with object info
                 description = f"AI detected {activity_type}"
-                if object_analysis.get("people_near_vehicles"):
-                    description += f" - Person detected near vehicle"
-                elif object_analysis.get("people_count", 0) > 0:
-                    description += f" - {object_analysis['people_count']} person(s) detected"
+                animal_count = object_analysis.get("animals_count", 0)
+                if animal_count > 0:
+                    animal_types = object_analysis.get("animal_types", [])
+                    if animal_types:
+                        description += f" - {animal_count} {animal_types[0]}(s) detected"
+                    else:
+                        description += f" - {animal_count} animal(s) detected"
                 
                 return {
                     "camera_id": camera_id,
@@ -228,74 +437,55 @@ class VideoAnalyzer:
                             "motion_speed": float(motion_speed),
                             "motion_consistency": float(motion_consistency),
                             "persistent_activity": persistent_activity,
-                            "suspicious_score": float(suspicious_score),
+                            "wildlife_score": float(wildlife_score),
                             "detection_method": "yolo_motion_combined" if self.yolo_model else "motion_analysis",
-                            "objects_detected": object_analysis.get("people_count", 0) + object_analysis.get("vehicles_count", 0),
-                            "people_count": object_analysis.get("people_count", 0),
-                            "vehicles_count": object_analysis.get("vehicles_count", 0),
-                            "people_near_vehicles": object_analysis.get("people_near_vehicles", False)
+                            "animals_detected": object_analysis.get("animals_count", 0),
+                            "animal_types": object_analysis.get("animal_types", [])
                         }
                     }
                 }
         
         return None
     
-    def _analyze_objects(self, detected_objects: Dict[str, Any]) -> Dict[str, Any]:
+    def _analyze_wildlife_objects(self, detected_objects: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Analyze detected objects for suspicious patterns
+        Analyze detected wildlife objects for patterns
         
-        Returns analysis of object positions, interactions, and behaviors
+        Returns analysis of animal positions, types, and behaviors
         """
         if not detected_objects or detected_objects.get("count", 0) == 0:
             return {
-                "people_count": 0,
-                "vehicles_count": 0,
-                "people_near_vehicles": False,
-                "loitering_detected": False
+                "animals_count": 0,
+                "animal_types": [],
+                "has_animals": False
             }
         
-        people = detected_objects.get("people", [])
-        vehicles = detected_objects.get("vehicles", [])
+        animals = detected_objects.get("animals", [])
+        animal_types = list(set([a["class_name"] for a in animals]))
         
-        # Check if people are near vehicles (car prowling indicator)
-        people_near_vehicles = False
-        if people and vehicles:
-            for person in people:
-                person_center = person["center"]
-                for vehicle in vehicles:
-                    vehicle_bbox = vehicle["bbox"]
-                    # Check if person center is near vehicle bbox
-                    if (vehicle_bbox[0] - 50 < person_center[0] < vehicle_bbox[2] + 50 and
-                        vehicle_bbox[1] - 50 < person_center[1] < vehicle_bbox[3] + 50):
-                        people_near_vehicles = True
-                        break
-                if people_near_vehicles:
-                    break
-        
-        # Check for loitering (person detected in same area over time)
-        loitering_detected = False
-        if len(self.object_history) >= 10 and people:
-            # Check if person has been in similar location for multiple frames
-            recent_people_positions = []
+        # Check for persistent wildlife presence (animals staying in area)
+        persistent_wildlife = False
+        if len(self.object_history) >= 10 and animals:
+            # Check if animals have been in similar location for multiple frames
+            recent_animal_positions = []
             for hist in self.object_history[-10:]:
-                if hist.get("people"):
-                    for p in hist["people"]:
-                        recent_people_positions.append(p["center"])
+                if hist.get("animals"):
+                    for a in hist["animals"]:
+                        recent_animal_positions.append(a["center"])
             
-            if len(recent_people_positions) >= 5:
+            if len(recent_animal_positions) >= 5:
                 # Calculate position variance
-                positions = np.array(recent_people_positions)
+                positions = np.array(recent_animal_positions)
                 position_variance = np.var(positions, axis=0).sum()
-                if position_variance < 10000:  # Low variance = person staying in same area
-                    loitering_detected = True
+                if position_variance < 15000:  # Low variance = animals staying in same area
+                    persistent_wildlife = True
         
         return {
-            "people_count": len(people),
-            "vehicles_count": len(vehicles),
-            "people_near_vehicles": people_near_vehicles,
-            "loitering_detected": loitering_detected,
-            "has_people": len(people) > 0,
-            "has_vehicles": len(vehicles) > 0
+            "animals_count": len(animals),
+            "animal_types": animal_types,
+            "has_animals": len(animals) > 0,
+            "persistent_wildlife": persistent_wildlife,
+            "animals": animals
         }
     
     def _analyze_motion(self, current_frame: np.ndarray, previous_frame: Optional[np.ndarray]) -> Tuple[float, float]:
@@ -392,125 +582,110 @@ class VideoAnalyzer:
         else:
             return "moderate"
     
-    def _calculate_suspicious_score_combined(
+    def _calculate_wildlife_score(
         self, edge_density: float, std_intensity: float, 
         motion_speed: float, motion_consistency: float,
         persistent_activity: float, movement_pattern: str,
         object_analysis: Dict[str, Any]
     ) -> float:
         """
-        Calculate suspicious activity score using multiple factors + object detection
+        Calculate wildlife detection score using multiple factors + object detection
         
-        Higher score = more suspicious. Threshold: 0.60
+        Higher score = more likely wildlife present. Threshold: 0.50
         """
         score = 0.0
         
-        # Factor 1: Edge density (but not too high - very high = noise)
-        if 0.10 < edge_density < 0.25:  # Sweet spot
-            score += 0.12
-        elif edge_density > 0.25:  # Too high = likely noise
-            score += 0.03  # Penalty for excessive activity
-        
-        # Factor 2: Motion consistency (concentrated motion = object, scattered = noise)
-        if motion_consistency > 0.3:  # Motion is concentrated (likely an object)
+        # Factor 1: Edge density (indicates movement/activity)
+        if 0.08 < edge_density < 0.25:  # Good range for animal movement
             score += 0.15
+        elif edge_density > 0.25:  # Too high = likely noise
+            score += 0.05
+        
+        # Factor 2: Motion consistency (concentrated motion = animal, scattered = noise)
+        if motion_consistency > 0.3:  # Motion is concentrated (likely an animal)
+            score += 0.20
         elif motion_consistency < 0.1:  # Scattered motion (likely noise)
             score -= 0.10  # Penalty
         
-        # Factor 3: Motion speed (slow, deliberate movement is more suspicious)
-        if 0.02 < motion_speed < 0.10:  # Moderate speed
-            score += 0.12
-        elif motion_speed > 0.15:  # Too fast = likely normal traffic
+        # Factor 3: Motion speed (animals move at various speeds)
+        if 0.01 < motion_speed < 0.15:  # Animal movement range
+            score += 0.15
+        elif motion_speed > 0.20:  # Too fast = likely noise
+            score -= 0.05
+        
+        # Factor 4: Persistent activity (animals often stay in area)
+        if persistent_activity > 0.5:  # Activity for 50%+ of recent frames
+            score += 0.25
+        elif persistent_activity < 0.2:  # Brief activity
             score -= 0.10  # Penalty
         
-        # Factor 4: Persistent activity (reduces false positives from brief events)
-        if persistent_activity > 0.6:  # Activity for 60%+ of recent frames
-            score += 0.20
-        elif persistent_activity < 0.3:  # Brief activity
-            score -= 0.15  # Penalty
-        
         # Factor 5: Movement pattern
-        if movement_pattern == "slow_deliberate":
-            score += 0.15  # Most suspicious
+        if movement_pattern in ["slow_deliberate", "moderate", "erratic"]:
+            score += 0.10  # Animal-like movement
         elif movement_pattern == "fast_movement":
-            score -= 0.10  # Less suspicious (normal traffic)
-        elif movement_pattern == "erratic":
-            score += 0.08  # Somewhat suspicious
+            score += 0.05  # Could be animal running
         
-        # Factor 6: Intensity variation (but not too high)
-        if 30 < std_intensity < 80:  # Moderate variation
-            score += 0.08
-        elif std_intensity > 100:  # Too high = likely lighting changes
-            score -= 0.10
+        # Factor 6: Intensity variation
+        if 20 < std_intensity < 90:  # Moderate variation
+            score += 0.05
         
-        # Factor 7: Object Detection (NEW - most important!)
-        if object_analysis.get("people_near_vehicles"):
-            score += 0.30  # Strong indicator of car prowling
-        elif object_analysis.get("loitering_detected"):
-            score += 0.25  # Person staying in same area
-        elif object_analysis.get("people_count", 0) > 0:
-            # Person detected but not near vehicle
-            if motion_speed > 0.02:  # Person is moving
-                score += 0.15
-            else:  # Person stationary
-                score += 0.10
-        elif object_analysis.get("has_people", False):
-            score += 0.08  # Person detected but low confidence
+        # Factor 7: Animal Detection (MOST IMPORTANT!)
+        animals_count = object_analysis.get("animals_count", 0)
+        if animals_count > 0:
+            score += 0.30  # Strong indicator of wildlife
+            if animals_count > 1:
+                score += 0.10  # Multiple animals
+        elif object_analysis.get("has_animals", False):
+            score += 0.15  # Animal detected but low confidence
         
-        # If no objects detected but high motion, reduce score (likely false positive)
-        if not object_analysis.get("has_people", False) and motion_speed > 0.1:
-            score -= 0.15  # High motion but no person = likely noise
+        # Factor 8: Persistent wildlife presence
+        if object_analysis.get("persistent_wildlife", False):
+            score += 0.15  # Animals staying in area
+        
+        # If no animals detected but high motion, reduce score (likely false positive)
+        if not object_analysis.get("has_animals", False) and motion_speed > 0.15:
+            score -= 0.15  # High motion but no animal = likely noise
         
         return max(0.0, min(1.0, score))  # Clamp between 0 and 1
     
-    def _classify_activity_with_objects(
+    def _classify_wildlife_activity(
         self, gray_frame: np.ndarray, edge_density: float, 
         std_intensity: float, motion_speed: float,
         persistent_activity: float, movement_pattern: str,
         object_analysis: Dict[str, Any]
     ) -> Optional[str]:
         """
-        Improved activity classification using object detection + motion analysis
+        Classify wildlife activity using object detection + motion analysis
         
-        Uses YOLO detections to make more accurate classifications
+        Uses YOLO detections to identify specific wildlife types
         """
-        people_near_vehicles = object_analysis.get("people_near_vehicles", False)
-        loitering_detected = object_analysis.get("loitering_detected", False)
-        has_people = object_analysis.get("has_people", False)
+        has_animals = object_analysis.get("has_animals", False)
+        animals_count = object_analysis.get("animals_count", 0)
+        persistent_wildlife = object_analysis.get("persistent_wildlife", False)
+        animal_types = object_analysis.get("animal_types", [])
         
-        # Car prowling: Person detected near vehicle with suspicious movement
-        if people_near_vehicles:
-            if (movement_pattern == "slow_deliberate" or 
-                (0.02 < motion_speed < 0.10 and persistent_activity > 0.4)):
-                return "car_prowling"
-            elif persistent_activity > 0.5:
-                return "car_prowling"  # Person near vehicle for extended time
-        
-        # Loitering: Person detected staying in same area
-        if loitering_detected and has_people:
-            return "loitering"
-        
-        # Suspicious movement: Person detected with suspicious motion patterns
-        if has_people:
-            if (movement_pattern in ["slow_deliberate", "erratic"] and
-                persistent_activity > 0.5):
-                return "suspicious_movement"
-            elif (0.10 < edge_density < 0.20 and 
-                  persistent_activity > 0.6):
-                return "suspicious_movement"
+        # If animals detected, classify as wildlife
+        if has_animals and animals_count > 0:
+            # Determine specific type if possible
+            if animal_types:
+                # Use the most common animal type
+                primary_type = animal_types[0]
+                return f"wildlife_{primary_type}"
+            else:
+                return "wildlife_detected"
         
         # Fallback to motion-only classification if no objects detected
         # (for cases where YOLO misses detection but motion is clear)
-        if not has_people:
-            if (movement_pattern == "slow_deliberate" and 
-                0.10 < edge_density < 0.20 and 
-                0.02 < motion_speed < 0.08 and
-                persistent_activity > 0.6):
-                return "suspicious_movement"
-            elif (persistent_activity > 0.7 and
-                  0.08 < edge_density < 0.15 and
-                  motion_speed < 0.05):
-                return "loitering"
+        if not has_animals:
+            if (movement_pattern in ["slow_deliberate", "moderate", "erratic"] and 
+                0.08 < edge_density < 0.25 and 
+                0.01 < motion_speed < 0.15 and
+                persistent_activity > 0.5):
+                return "wildlife_detected"
+            elif (persistent_activity > 0.6 and
+                  0.08 < edge_density < 0.20 and
+                  0.01 < motion_speed < 0.10):
+                return "wildlife_detected"
         
         return None
     

@@ -7,7 +7,7 @@ from datetime import datetime
 import uuid
 import asyncio
 
-# Import services for police calling and community notifications
+# Import services for emergency calling and community notifications
 try:
     from services.threat_analyzer import ThreatAnalyzer
     from services.twilio_service import TwilioService
@@ -20,7 +20,7 @@ except ImportError:
     CommunityNotifier = None
 
 class AgentCoordinator:
-    """Coordinates multiple camera agents for threat detection"""
+    """Coordinates multiple camera agents for wildlife and wildfire detection"""
     
     def __init__(self, use_real_ai: bool = False):
         self.agents: Dict[str, 'CameraAgent'] = {}
@@ -30,13 +30,16 @@ class AgentCoordinator:
         self.use_real_ai = use_real_ai
         self._initialize_cameras()
         
-        # Initialize services for police calling and notifications
+        # Initialize services for emergency calling and notifications
         self.threat_analyzer = ThreatAnalyzer() if SERVICES_AVAILABLE and ThreatAnalyzer else None
         self.twilio_service = TwilioService() if SERVICES_AVAILABLE and TwilioService else None
         self.community_notifier = CommunityNotifier(self.twilio_service) if SERVICES_AVAILABLE and CommunityNotifier and self.twilio_service else None
         
         # Track which threats have already triggered calls/notifications
         self.notified_threats: set = set()
+        
+        # Track lost pets across multiple cameras
+        self.lost_pet_tracking: Dict[str, List[Dict[str, Any]]] = {}  # pet_id -> list of detections
     
     def _initialize_cameras(self):
         """Initialize demo camera network"""
@@ -80,6 +83,10 @@ class AgentCoordinator:
         threat["status"] = "active"
         self.threats.append(threat)
         
+        # Track lost pets across multiple cameras
+        if threat.get("type") == "lost_pet":
+            self._track_lost_pet(threat)
+        
         # Analyze threat and trigger appropriate responses
         # Schedule async processing (will be handled by FastAPI event loop)
         try:
@@ -110,7 +117,7 @@ class AgentCoordinator:
                 pass
     
     async def _process_threat_response(self, threat: Dict[str, Any]):
-        """Process threat and trigger police calls/notifications if needed"""
+        """Process threat and trigger emergency calls/notifications if needed"""
         if not self.threat_analyzer:
             return
         
@@ -128,9 +135,13 @@ class AgentCoordinator:
         # Find nearby cameras that may have also detected this
         nearby_cameras = self._find_nearby_cameras(threat.get("location", {}))
         
-        # Call police if needed
+        # Call emergency services if needed (fire dept for wildfires, wildlife authorities for dangerous wildlife, animal control for lost pets)
         if analysis.get("should_call_police", False):
-            await self._call_police(threat, analysis, nearby_cameras)
+            # For lost pets, call animal control instead of police
+            if analysis.get("category") == "lost_pet":
+                await self._call_animal_control(threat, analysis, nearby_cameras)
+            else:
+                await self._call_police(threat, analysis, nearby_cameras)
             self.notified_threats.add(threat_id)
         
         # Notify community if needed
@@ -182,24 +193,79 @@ class AgentCoordinator:
         
         return R * c
     
+    def _track_lost_pet(self, threat: Dict[str, Any]):
+        """Track lost pet across multiple cameras to detect if it's moving across streets"""
+        pet_type = threat.get("details", {}).get("pet_type", "pet")
+        camera_id = threat.get("camera_id")
+        location = threat.get("location", {})
+        
+        # Create a pet ID based on type and approximate location (for tracking)
+        # In a real system, you'd use more sophisticated tracking
+        pet_id = f"{pet_type}_{camera_id}"
+        
+        if pet_id not in self.lost_pet_tracking:
+            self.lost_pet_tracking[pet_id] = []
+        
+        # Add detection
+        self.lost_pet_tracking[pet_id].append({
+            "camera_id": camera_id,
+            "location": location,
+            "timestamp": threat.get("timestamp"),
+            "threat_id": threat.get("id")
+        })
+        
+        # Keep only last 10 detections per pet
+        if len(self.lost_pet_tracking[pet_id]) > 10:
+            self.lost_pet_tracking[pet_id].pop(0)
+        
+        # Check if pet has been detected across multiple cameras (indicating movement across streets)
+        unique_cameras = set([d["camera_id"] for d in self.lost_pet_tracking[pet_id]])
+        if len(unique_cameras) >= 2:
+            # Pet detected across multiple cameras - definitely lost
+            threat["details"]["detected_across_cameras"] = True
+            threat["details"]["camera_count"] = len(unique_cameras)
+            threat["details"]["is_moving_across_streets"] = True
+            print(f"Lost pet {pet_type} detected across {len(unique_cameras)} cameras - moving across area")
+    
     async def _call_police(
         self,
         threat: Dict[str, Any],
         analysis: Dict[str, Any],
         nearby_cameras: List[Dict[str, Any]]
     ):
-        """Call police with threat information"""
+        """Call emergency services with threat information (fire dept for wildfires, wildlife authorities for dangerous wildlife)"""
         if not self.twilio_service:
-            print("Twilio service not available - cannot call police")
+            print("Twilio service not available - cannot call emergency services")
             return
         
         try:
             result = self.twilio_service.call_police(threat, analysis, nearby_cameras)
             if result:
                 threat["police_call"] = result
-                print(f"Police called for threat {threat.get('id')}: {result.get('status')}")
+                print(f"Emergency services called for threat {threat.get('id')}: {result.get('status')}")
         except Exception as e:
-            print(f"Error calling police: {e}")
+            print(f"Error calling emergency services: {e}")
+    
+    async def _call_animal_control(
+        self,
+        threat: Dict[str, Any],
+        analysis: Dict[str, Any],
+        nearby_cameras: List[Dict[str, Any]]
+    ):
+        """Call animal control for lost pet detection"""
+        if not self.twilio_service:
+            print("Twilio service not available - cannot call animal control")
+            return
+        
+        try:
+            # Use the same call_police method but with different messaging
+            result = self.twilio_service.call_police(threat, analysis, nearby_cameras)
+            if result:
+                threat["animal_control_call"] = result
+                pet_type = threat.get("details", {}).get("pet_type", "pet")
+                print(f"Animal control called for lost {pet_type} {threat.get('id')}: {result.get('status')}")
+        except Exception as e:
+            print(f"Error calling animal control: {e}")
     
     async def _notify_community(
         self,

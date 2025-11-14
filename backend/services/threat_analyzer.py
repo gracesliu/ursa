@@ -14,31 +14,32 @@ class ThreatSeverity(enum.Enum):
     CRITICAL = "critical"
 
 class ThreatCategory(enum.Enum):
-    """Threat categories based on use cases"""
-    KIDNAPPING = "kidnapping"
-    ASSAULT = "assault"
-    SUSPICIOUS_ACTIVITY = "suspicious_activity"
-    BEHAVIORAL_ABNORMALITY = "behavioral_abnormality"
-    FIRE = "fire"
-    CAR_PROWING = "car_prowling"
-    LOITERING = "loitering"
+    """Threat categories for wildlife and wildfire detection"""
+    WILDFIRE = "wildfire"
+    WILDLIFE = "wildlife"
+    WILDLIFE_BEAR = "wildlife_bear"
+    WILDLIFE_DEER = "wildlife_deer"
+    WILDLIFE_COYOTE = "wildlife_coyote"
+    WILDLIFE_DETECTED = "wildlife_detected"
+    LOST_PET = "lost_pet"
     UNKNOWN = "unknown"
 
 class ThreatAnalyzer:
     """Analyzes threats to determine severity and appropriate response"""
     
     def __init__(self):
-        self.call_threshold = 0.75  # Confidence threshold for calling police
+        self.call_threshold = 0.75  # Confidence threshold for calling emergency services
         self.critical_activities = [
-            "kidnapping",
-            "assault",
-            "fire",
-            "violent_activity"
+            "wildfire",
+            "fire"
         ]
         self.high_severity_activities = [
-            "car_prowling",
-            "suspicious_movement",
-            "break_in_attempt"
+            "wildlife_bear",
+            "wildlife_coyote",
+            "wildlife_detected"
+        ]
+        self.lost_pet_activities = [
+            "lost_pet"
         ]
     
     def analyze_threat(self, threat: Dict[str, Any]) -> Dict[str, Any]:
@@ -61,7 +62,7 @@ class ThreatAnalyzer:
         # Determine severity
         severity = self._determine_severity(activity_type, confidence, details, category)
         
-        # Determine if police should be called
+        # Determine if emergency services should be called
         should_call_police = self._should_call_police(severity, confidence, category)
         
         # Determine if community should be notified
@@ -87,20 +88,18 @@ class ThreatAnalyzer:
         """Categorize threat based on activity type"""
         activity_lower = activity_type.lower()
         
-        if "kidnap" in activity_lower or "abduction" in activity_lower:
-            return ThreatCategory.KIDNAPPING
-        elif "assault" in activity_lower or "attack" in activity_lower or "violence" in activity_lower:
-            return ThreatCategory.ASSAULT
-        elif "fire" in activity_lower or "smoke" in activity_lower:
-            return ThreatCategory.FIRE
-        elif "car_prowl" in activity_lower or "vehicle" in activity_lower:
-            return ThreatCategory.CAR_PROWING
-        elif "loiter" in activity_lower:
-            return ThreatCategory.LOITERING
-        elif "child" in activity_lower or "alone" in activity_lower:
-            return ThreatCategory.BEHAVIORAL_ABNORMALITY
-        elif "suspicious" in activity_lower:
-            return ThreatCategory.SUSPICIOUS_ACTIVITY
+        if "wildfire" in activity_lower or "fire" in activity_lower or "smoke" in activity_lower:
+            return ThreatCategory.WILDFIRE
+        elif "wildlife_bear" in activity_lower or "bear" in activity_lower:
+            return ThreatCategory.WILDLIFE_BEAR
+        elif "wildlife_coyote" in activity_lower or "coyote" in activity_lower:
+            return ThreatCategory.WILDLIFE_COYOTE
+        elif "wildlife_deer" in activity_lower or "deer" in activity_lower:
+            return ThreatCategory.WILDLIFE_DEER
+        elif "lost_pet" in activity_lower or "lost pet" in activity_lower:
+            return ThreatCategory.LOST_PET
+        elif "wildlife" in activity_lower:
+            return ThreatCategory.WILDLIFE
         else:
             return ThreatCategory.UNKNOWN
     
@@ -115,23 +114,23 @@ class ThreatAnalyzer:
         activity_lower = activity_type.lower()
         
         # Critical threats - immediate danger
-        if category in [ThreatCategory.KIDNAPPING, ThreatCategory.ASSAULT, ThreatCategory.FIRE]:
+        if category == ThreatCategory.WILDFIRE:
             return ThreatSeverity.CRITICAL
         
-        # High severity - significant risk
-        if category == ThreatCategory.CAR_PROWING and confidence > 0.8:
+        # High severity - significant risk (dangerous wildlife)
+        if category == ThreatCategory.WILDLIFE_BEAR and confidence > 0.7:
             return ThreatSeverity.HIGH
-        if category == ThreatCategory.SUSPICIOUS_ACTIVITY and confidence > 0.85:
+        if category == ThreatCategory.WILDLIFE_COYOTE and confidence > 0.7:
             return ThreatSeverity.HIGH
-        if category == ThreatCategory.BEHAVIORAL_ABNORMALITY and confidence > 0.75:
+        if category == ThreatCategory.WILDLIFE and confidence > 0.8:
             return ThreatSeverity.HIGH
         
-        # Medium severity - moderate risk
+        # Medium severity - moderate risk (lost pets)
+        if category == ThreatCategory.LOST_PET:
+            return ThreatSeverity.MEDIUM
         if confidence > 0.7:
             return ThreatSeverity.MEDIUM
-        if category == ThreatCategory.CAR_PROWING:
-            return ThreatSeverity.MEDIUM
-        if category == ThreatCategory.SUSPICIOUS_ACTIVITY:
+        if category in [ThreatCategory.WILDLIFE, ThreatCategory.WILDLIFE_DEER]:
             return ThreatSeverity.MEDIUM
         
         # Low severity - minor concern
@@ -143,12 +142,16 @@ class ThreatAnalyzer:
         confidence: float,
         category: ThreatCategory
     ) -> bool:
-        """Determine if police should be called"""
-        # Always call for critical threats
+        """Determine if emergency services should be called (fire dept for wildfires, wildlife authorities for dangerous wildlife, animal control for lost pets)"""
+        # Always call for critical threats (wildfires)
         if severity == ThreatSeverity.CRITICAL:
             return True
         
-        # Call for high severity with high confidence
+        # Call animal control for lost pets (medium confidence threshold)
+        if category == ThreatCategory.LOST_PET and confidence >= 0.7:
+            return True
+        
+        # Call for high severity with high confidence (dangerous wildlife like bears)
         if severity == ThreatSeverity.HIGH and confidence >= self.call_threshold:
             return True
         
@@ -166,6 +169,10 @@ class ThreatAnalyzer:
         """Determine if community should be notified"""
         # Notify for medium and above
         if severity in [ThreatSeverity.MEDIUM, ThreatSeverity.HIGH, ThreatSeverity.CRITICAL]:
+            return True
+        
+        # Always notify for lost pets (to help find owner)
+        if category == ThreatCategory.LOST_PET:
             return True
         
         # Always notify for behavioral abnormalities (child alone, etc.)
@@ -193,22 +200,30 @@ class ThreatAnalyzer:
         actions = []
         
         if severity == ThreatSeverity.CRITICAL:
-            actions.append("Immediate police dispatch required")
+            actions.append("Immediate fire department dispatch required")
             actions.append("Alert all nearby cameras")
             actions.append("Notify community immediately")
         elif severity == ThreatSeverity.HIGH:
-            actions.append("Contact police dispatch")
+            actions.append("Contact wildlife authorities or fire department")
             actions.append("Monitor with nearby cameras")
             actions.append("Notify community")
         elif severity == ThreatSeverity.MEDIUM:
             actions.append("Monitor situation")
             actions.append("Notify community if pattern continues")
         
-        if category == ThreatCategory.FIRE:
-            actions.append("Contact fire department")
-        elif category == ThreatCategory.BEHAVIORAL_ABNORMALITY:
-            actions.append("Check for guardian presence")
-            actions.append("Monitor child safety")
+        if category == ThreatCategory.WILDFIRE:
+            actions.append("Contact fire department immediately")
+            actions.append("Alert nearby residents")
+        elif category == ThreatCategory.WILDLIFE_BEAR:
+            actions.append("Alert wildlife authorities")
+            actions.append("Warn nearby residents")
+        elif category == ThreatCategory.WILDLIFE_COYOTE:
+            actions.append("Alert wildlife authorities")
+            actions.append("Monitor situation")
+        elif category == ThreatCategory.LOST_PET:
+            actions.append("Contact animal control")
+            actions.append("Notify nearby residents")
+            actions.append("Monitor pet movement across cameras")
         
         return actions
     

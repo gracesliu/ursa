@@ -1,5 +1,6 @@
 """
 Twilio Service - Handles phone calls and SMS via Twilio
+Uses AI to generate dynamic, contextual messages
 """
 
 import os
@@ -8,6 +9,14 @@ from twilio.rest import Client
 from twilio.twiml.voice_response import VoiceResponse, Gather
 from dotenv import load_dotenv
 import json
+
+# Import AI message generator
+try:
+    from services.ai_message_generator import AIMessageGenerator
+    AI_MESSAGE_GENERATOR_AVAILABLE = True
+except ImportError:
+    AI_MESSAGE_GENERATOR_AVAILABLE = False
+    AIMessageGenerator = None
 
 load_dotenv()
 
@@ -38,6 +47,9 @@ class TwilioService:
                 print(f"Warning: Could not initialize Twilio client: {e}")
         else:
             print("Warning: Twilio credentials not found. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in .env")
+        
+        # Initialize AI message generator
+        self.ai_generator = AIMessageGenerator() if AI_MESSAGE_GENERATOR_AVAILABLE and AIMessageGenerator else None
     
     def call_police(
         self, 
@@ -46,11 +58,14 @@ class TwilioService:
         nearby_cameras: List[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
         """
-        Call the configured number (NOT actual police/911 - this is for demo purposes)
+        Call emergency services (fire dept, wildlife authorities, or animal control)
         
         NOTE: This calls POLICE_NUMBER from .env (defaults to 3022151083 for demo).
         This is YOUR number, not emergency services. In production, this would
-        call a police dispatch non-emergency line or your security monitoring service.
+        call the appropriate service:
+        - Fire department for wildfires
+        - Wildlife authorities for dangerous wildlife
+        - Animal control for lost pets
         
         Args:
             threat_info: Original threat detection information
@@ -65,8 +80,11 @@ class TwilioService:
             return self._simulate_call(threat_info, analysis, nearby_cameras)
         
         try:
-            # Generate call message
-            call_message = self._generate_call_message(threat_info, analysis, nearby_cameras)
+            # Generate call message using AI
+            if self.ai_generator:
+                call_message = self.ai_generator.generate_call_message(threat_info, analysis, nearby_cameras)
+            else:
+                call_message = self._generate_call_message(threat_info, analysis, nearby_cameras)
             
             # Make the call
             call = self.client.calls.create(
@@ -136,23 +154,21 @@ class TwilioService:
         analysis: Dict[str, Any],
         nearby_cameras: Optional[List[Dict[str, Any]]]
     ) -> str:
-        """Generate the message to speak during the call"""
-        activity_type = threat_info.get("type", "suspicious activity")
+        """Generate fallback call message (used when AI is not available)"""
+        # This is now a fallback - AI generator handles the main logic
+        activity_type = threat_info.get("type", "detection")
         location = threat_info.get("location", {})
         confidence = threat_info.get("confidence", 0.0)
         severity = analysis.get("severity", "unknown")
         category = analysis.get("category", "unknown")
         
-        message = f"Hello, this is Ursa security system calling to report a {severity} severity incident. "
+        message = f"Hello, this is Ursa Wildlife and Wildfire Detection System. "
         message += f"We have detected {activity_type.replace('_', ' ')} "
-        message += f"with {confidence:.0%} confidence. "
-        message += f"The incident is categorized as {category.replace('_', ' ')}. "
+        message += f"with {severity} severity and {confidence:.0%} confidence. "
         
-        # Add location info
         if location.get("lat") and location.get("lng"):
             message += f"Location coordinates are {location['lat']:.4f}, {location['lng']:.4f}. "
         
-        # Add nearby camera info
         if nearby_cameras and len(nearby_cameras) > 0:
             message += f"We have {len(nearby_cameras)} additional cameras monitoring the area. "
         
@@ -193,7 +209,11 @@ class TwilioService:
         
         This is called by the webhook when Twilio connects the call
         """
-        message = self._generate_call_message(threat_info, analysis, nearby_cameras)
+        # Use AI to generate message
+        if self.ai_generator:
+            message = self.ai_generator.generate_call_message(threat_info, analysis, nearby_cameras)
+        else:
+            message = self._generate_call_message(threat_info, analysis, nearby_cameras)
         
         response = VoiceResponse()
         

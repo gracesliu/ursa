@@ -1,6 +1,6 @@
 """
-Constellation - AI Agent Network for Neighborhood Security
-FastAPI backend with WebSocket support for real-time threat detection
+URSA - AI Agent Network for Wildlife and Wildfire Detection
+FastAPI backend with WebSocket support for real-time wildlife and wildfire detection
 """
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form
@@ -16,14 +16,14 @@ from dotenv import load_dotenv
 
 from agents.coordinator import AgentCoordinator
 from agents.camera_agent import CameraAgent
-from demo.scenarios.car_prowler import CarProwlerScenario
+from demo.scenarios.wildlife_detection import WildlifeDetectionScenario
 import uuid
 
 # Twilio service will be accessed via coordinator
 
 load_dotenv()
 
-app = FastAPI(title="Constellation API", version="1.0.0")
+app = FastAPI(title="URSA API", version="1.0.0")
 
 # CORS middleware for frontend
 app.add_middleware(
@@ -70,15 +70,16 @@ USE_REAL_AI = os.getenv("USE_REAL_AI", "false").lower() == "true"
 coordinator = AgentCoordinator(use_real_ai=USE_REAL_AI)
 
 # Initialize demo scenario
-scenario = CarProwlerScenario(coordinator, manager)
+scenario = WildlifeDetectionScenario(coordinator, manager)
 
 @app.get("/")
 async def root():
     return {
-        "name": "Constellation",
+        "name": "URSA",
         "version": "1.0.0",
         "status": "operational",
-        "agents": coordinator.get_agent_count()
+        "agents": coordinator.get_agent_count(),
+        "description": "Wildlife and Wildfire Detection System"
     }
 
 @app.get("/api/cameras")
@@ -98,9 +99,9 @@ async def get_threats():
     }
 
 @app.post("/api/scenarios/start")
-async def start_scenario(scenario_name: str = "car_prowler"):
+async def start_scenario(scenario_name: str = "wildlife_detection"):
     """Start a demo scenario"""
-    if scenario_name == "car_prowler":
+    if scenario_name == "wildlife_detection":
         await scenario.start()
         return {"status": "started", "scenario": scenario_name}
     return {"status": "error", "message": "Unknown scenario"}
@@ -367,10 +368,10 @@ async def twilio_voice_webhook(request: Request):
     # Get the most recent threat that triggered a call
     threats = coordinator.get_active_threats()
     if not threats:
-        # Return a default message if no threats
+        # Return a default message if no detections
         from twilio.twiml.voice_response import VoiceResponse
         response = VoiceResponse()
-        response.say("No active threats at this time.", voice='alice')
+        response.say("No active wildlife or wildfire detections at this time.", voice='alice')
         return Response(content=str(response), media_type="application/xml")
     
     # Get the most recent threat with analysis
@@ -383,7 +384,7 @@ async def twilio_voice_webhook(request: Request):
     if not recent_threat or not coordinator.twilio_service:
         from twilio.twiml.voice_response import VoiceResponse
         response = VoiceResponse()
-        response.say("Unable to retrieve threat information.", voice='alice')
+        response.say("Unable to retrieve detection information.", voice='alice')
         return Response(content=str(response), media_type="application/xml")
     
     # Find nearby cameras
@@ -440,19 +441,19 @@ async def twilio_call_status(request: Request):
 
 @app.get("/api/police-call/test")
 async def test_police_call():
-    """Test endpoint to manually trigger a police call"""
+    """Test endpoint to manually trigger an emergency call (fire department for wildfires)"""
     try:
         # Create a test threat
         test_threat = {
             "id": str(uuid.uuid4()),
-            "type": "car_prowling",
+            "type": "wildfire",
             "camera_id": "cam_001",
             "location": {"lat": 37.7749, "lng": -122.4194},
             "confidence": 0.85,
             "timestamp": datetime.now().isoformat(),
             "details": {
-                "description": "Test car prowling incident",
-                "severity": "high",
+                "description": "Test wildfire detection",
+                "severity": "critical",
                 "action_required": True
             }
         }

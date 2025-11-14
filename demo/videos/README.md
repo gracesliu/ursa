@@ -1,15 +1,20 @@
-# Camera Video Files
+# Wildlife & Wildfire Video Files
 
 ## 📍 Upload Location
 
-**Upload your videos here:**
+**Upload your wildlife and fire videos here:**
 ```
-/Users/grace/constellation/demo/videos/
+/Users/grace/ursa/demo/videos/
 ```
 
 ## 📝 File Naming
 
-Name your video files exactly as follows (case-sensitive):
+You can name your video files anything you want, but update the camera configuration in `backend/agents/coordinator.py` to match:
+
+Example:
+- `wildlife_bear.mp4` - Bear detection video
+- `wildlife_deer.mp4` - Deer detection video  
+- `wildfire.mp4` - Fire/smoke detection video
 - `cam_001.mp4` - Camera 1 (123 Oak St)
 - `cam_002.mp4` - Camera 2 (456 Pine Ave)
 - `cam_003.mp4` - Camera 3 (789 Elm Dr)
@@ -61,11 +66,12 @@ cp /path/to/your/video.mp4 /Users/grace/constellation/demo/videos/cam_001.mp4
 ## 🎯 What You'll See
 
 With Real AI enabled, you'll see:
-- **Blue bounding boxes** around detected people
-- **Green bounding boxes** around detected vehicles  
-- **Labels** showing object class and confidence (e.g., "person 85%")
+- **Bounding boxes** around detected animals (bears, deer, birds, etc.)
+- **Fire/smoke detection** with color analysis
+- **Labels** showing animal type and confidence (e.g., "bear 85%")
 - **Real-time analysis** as video plays
-- **Detection count** in footer (e.g., "2 person(s), 1 vehicle(s)")
+- **Detection count** showing number of animals detected
+- **Wildfire alerts** with critical severity when fire is detected
 
 ## 💡 Tips
 
@@ -107,3 +113,5 @@ demo/videos/
 - Make sure Real AI mode is enabled (toggle in Control Panel)
 - Check that YOLO is installed: `pip install ultralytics`
 - Verify backend console shows "YOLO model loaded successfully"
+- For fire detection: Make sure video has visible red/orange/yellow flames or smoke
+- For wildlife: Make sure animals are clearly visible in the video

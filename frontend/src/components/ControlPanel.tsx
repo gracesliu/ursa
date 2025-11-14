@@ -4,7 +4,7 @@ interface ControlPanelProps {
   scenarioRunning: boolean
   onStart: () => void
   onStop: () => void
-  threatCount: number
+  detectionCount: number
   cameraCount: number
   useRealAI: boolean
   onToggleAI: () => void
@@ -14,7 +14,7 @@ export default function ControlPanel({
   scenarioRunning,
   onStart,
   onStop,
-  threatCount,
+  detectionCount,
   cameraCount,
   useRealAI,
   onToggleAI,
@@ -29,8 +29,8 @@ export default function ControlPanel({
           <div className="stat-label">Cameras</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value threat">{threatCount}</div>
-          <div className="stat-label">Active Threats</div>
+          <div className="stat-value detection">{detectionCount}</div>
+          <div className="stat-label">Active Detections</div>
         </div>
       </div>
 
@@ -58,7 +58,7 @@ export default function ControlPanel({
         
         <h3 style={{ marginTop: '1.5rem' }}>Demo Scenario</h3>
         <p className="scenario-description">
-          Car Prowler Detection: {useRealAI ? 'Real AI' : 'Simulated'} mode detecting suspicious activity across multiple cameras
+          Wildlife & Wildfire Detection: {useRealAI ? 'Real AI' : 'Simulated'} mode detecting wildlife and fire across monitoring cameras
         </p>
         
         {!scenarioRunning ? (

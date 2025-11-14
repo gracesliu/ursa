@@ -1,5 +1,5 @@
 """
-Camera Agent - Individual camera agent for threat detection
+Camera Agent - Individual camera agent for wildlife and wildfire detection
 """
 
 from typing import Dict, Any, Optional, List
@@ -112,24 +112,59 @@ class CameraAgent:
     def _get_activity_details(self, activity_type: str) -> Dict[str, Any]:
         """Get details for activity type"""
         details_map = {
-            "car_prowling": {
-                "description": "Individual checking car door handles",
-                "severity": "medium",
+            "wildfire": {
+                "description": "Wildfire detected - fire and/or smoke visible",
+                "severity": "critical",
                 "action_required": True
             },
-            "loitering": {
-                "description": "Person loitering near vehicles",
+            "wildlife_detected": {
+                "description": "Wildlife detected in area",
+                "severity": "medium",
+                "action_required": False
+            },
+            "wildlife_bear": {
+                "description": "Bear detected in area",
+                "severity": "high",
+                "action_required": True
+            },
+            "wildlife_coyote": {
+                "description": "Coyote detected in area",
+                "severity": "high",
+                "action_required": True
+            },
+            "wildlife_deer": {
+                "description": "Deer detected in area",
                 "severity": "low",
                 "action_required": False
             },
-            "suspicious_movement": {
-                "description": "Unusual movement pattern detected",
+            "wildlife_bird": {
+                "description": "Bird detected",
+                "severity": "low",
+                "action_required": False
+            },
+            "wildlife_cat": {
+                "description": "Cat detected",
+                "severity": "low",
+                "action_required": False
+            },
+            "wildlife_dog": {
+                "description": "Dog detected",
+                "severity": "low",
+                "action_required": False
+            },
+            "wildlife_horse": {
+                "description": "Horse detected",
+                "severity": "low",
+                "action_required": False
+            },
+            "lost_pet": {
+                "description": "Lost pet detected - no owner nearby, moving across area",
                 "severity": "medium",
                 "action_required": True
             }
         }
         return details_map.get(activity_type, {
-            "description": "Unknown activity",
+            "description": "Wildlife or wildfire activity detected",
             "severity": "low",
             "action_required": False
         })
@@ -151,7 +186,7 @@ class CameraAgent:
                     f"Detection method: {metrics.get('detection_method', 'unknown')}",
                     f"Confidence: {detection['confidence']:.0%}"
                 ],
-                "conclusion": f"AI threat identified: {detection['activity_type']}"
+                "conclusion": f"AI detection identified: {detection['activity_type']}"
             }
         else:
             # Simulated reasoning
@@ -165,7 +200,7 @@ class CameraAgent:
                     f"Behavior pattern matches: {detection['behavior']}",
                     f"Confidence threshold exceeded: {detection['confidence']:.0%}"
                 ],
-                "conclusion": f"Threat identified: {detection['activity_type']}"
+                "conclusion": f"Detection identified: {detection['activity_type']}"
             }
         
         self.reasoning_log.append(reasoning)
