@@ -13,7 +13,7 @@ curl http://localhost:8000/api/police-call/test
 **What happens:**
 1. Creates a test threat (car prowling, 85% confidence)
 2. Analyzes threat → Determines HIGH severity
-3. Calls your phone: **+13022151083**
+3. Calls your phone (configured in `.env` as `POLICE_NUMBER`)
 4. When you answer, you'll hear an AI-generated message
 
 ### What You'll Hear
@@ -29,7 +29,7 @@ Then you can:
 
 **If you don't receive a call:**
 - Check your phone isn't on Do Not Disturb
-- Verify the number in `.env`: `POLICE_NUMBER=+13022151083`
+- Verify the number in `.env`: `POLICE_NUMBER=+15551234567` (your actual number)
 - Check Twilio console for call logs: https://console.twilio.com/us1/monitor/logs/calls
 
 **If the call doesn't have voice:**

@@ -62,7 +62,7 @@ Quick guide to test the Ursa police calling feature.
    TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
    TWILIO_AUTH_TOKEN=your_auth_token_here
    TWILIO_PHONE_NUMBER=+15551234567  # Your Twilio number
-   POLICE_NUMBER=+13022151083  # Your phone number (will receive calls)
+   POLICE_NUMBER=  # Your phone number (will receive calls) - Format: +15551234567
    BASE_URL=https://abc123.ngrok.io  # Your ngrok URL
    ```
 

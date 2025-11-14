@@ -51,7 +51,7 @@ Since you're on a trial account, you need to verify the number you want to recei
 
 1. Go to: Phone Numbers → Manage → Verified Caller IDs
 2. Click "Add a new Caller ID"
-3. Enter your phone number: **+13022151083**
+3. Enter your phone number (format: +15551234567)
 4. Twilio will call/text you with a verification code
 5. Enter the code to verify
 
@@ -70,7 +70,7 @@ TWILIO_AUTH_TOKEN=your_auth_token_here
 TWILIO_PHONE_NUMBER=+15551234567
 
 # Your Phone Number (the one you verified in Step 3)
-POLICE_NUMBER=+13022151083
+POLICE_NUMBER=  # Format: +15551234567
 
 # Base URL for webhooks (see Step 5)
 BASE_URL=https://your-ngrok-url.ngrok.io

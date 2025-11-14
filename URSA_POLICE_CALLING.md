@@ -65,7 +65,7 @@ TWILIO_AUTH_TOKEN=your_auth_token_here
 TWILIO_PHONE_NUMBER=+1234567890  # Your Twilio phone number
 
 # Police/Demo Number (your number for testing)
-POLICE_NUMBER=+13022151083  # Format: +1 followed by 10 digits
+POLICE_NUMBER=  # Format: +1 followed by 10 digits (e.g., +15551234567)
 
 # Base URL for Twilio webhooks (use ngrok for local dev)
 BASE_URL=http://localhost:8000
@@ -88,7 +88,7 @@ Edit `backend/services/community_notifier.py` to add community members:
 
 ```python
 self.community_members = {
-    "+13022151083": {"lat": 37.7749, "lng": -122.4194, "name": "Your Name"},
+    "+15551234567": {"lat": 37.7749, "lng": -122.4194, "name": "Your Name"},
     # Add more members here
 }
 ```

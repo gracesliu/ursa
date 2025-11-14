@@ -13,14 +13,16 @@ Create a file called `.env` in the `backend/` directory with this content:
 
 ```env
 # Twilio Configuration
+# Get these from: https://console.twilio.com/
 TWILIO_ACCOUNT_SID=your_account_sid_here
 TWILIO_AUTH_TOKEN=your_auth_token_here
 
 # Twilio Phone Number (get this next)
 TWILIO_PHONE_NUMBER=
 
-# Your Phone Number
-POLICE_NUMBER=+13022151083
+# Your Phone Number (for testing/demo - will receive calls)
+# Format: +15551234567
+POLICE_NUMBER=
 
 # Base URL (we'll update this with ngrok)
 BASE_URL=http://localhost:8000

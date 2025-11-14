@@ -19,6 +19,7 @@ fi
 # Create .env file
 cat > .env << 'EOF'
 # Twilio Configuration
+# Get these from: https://console.twilio.com/
 TWILIO_ACCOUNT_SID=your_account_sid_here
 TWILIO_AUTH_TOKEN=your_auth_token_here
 
@@ -26,8 +27,9 @@ TWILIO_AUTH_TOKEN=your_auth_token_here
 # Format: +15551234567
 TWILIO_PHONE_NUMBER=
 
-# Your Phone Number (already verified)
-POLICE_NUMBER=+13022151083
+# Your Phone Number (for testing/demo - will receive calls)
+# Format: +15551234567
+POLICE_NUMBER=
 
 # Base URL for webhooks (use ngrok URL when running)
 BASE_URL=http://localhost:8000
